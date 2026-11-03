@@ -1,0 +1,38 @@
+name: ${APP_NAME:?}
+
+# Networks: `app` joins web and api; `data` joins api and db. The database is unreachable from web.
+services:
+  web:
+    image: ${WEB_IMAGE:-${APP_NAME:?}-web}:${WEB_TAG:-main}
+    build: ./frontend
+    restart: unless-stopped
+    depends_on:
+      api: { condition: service_healthy }
+    networks: [app]
+  api:
+    image: ${API_IMAGE:-${APP_NAME:?}-api}:${API_TAG:-main}
+    build: ./backend/Api
+    restart: unless-stopped
+    environment:
+      ConnectionStrings__Default: Host=db;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+    depends_on:
+      db: { condition: service_healthy }
+    networks: [app, data]
+  db:
+    image: postgres:17.11-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes: [db_data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      retries: 10
+    networks: [data]
+networks:
+  app: {}
+  data: {}
+volumes:
+  db_data:
